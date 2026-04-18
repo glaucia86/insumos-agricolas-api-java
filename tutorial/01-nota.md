@@ -17,7 +17,7 @@ src/
 
 A Arquitetura Hexagonal (Ports & Adapters) evolui esse conceito com uma regra central:
 
-> [!INFO]
+> [!TIP]
 > **O domínio não conhece nada do mundo externo.** HTTP, banco de dados, Kafka — tudo isso é detalhe de infraestrutura.
 
 O domínio fica no centro. O mundo externo se conecta a ele através de **ports** (interfaces) e **adapters** (implementações).
@@ -370,7 +370,6 @@ public class CadastraProdutoService implements CadastraProdutoUseCase {
 
 A linha atual está com a sintaxe errada. O `[!NOTE]` precisa estar sozinho na primeira linha, e o conteúdo nas linhas seguintes. Ficaria assim:
 
-```markdown
 > [!NOTE]
 > **Paralelo TypeScript:**
 > ```typescript
@@ -383,7 +382,7 @@ A linha atual está com a sintaxe errada. O `[!NOTE]` precisa estar sozinho na p
 >     }
 > }
 > ```
-```
+
 
 Na sequência criaremos o **adapter de persistência** — a implementação JPA do `ProdutoRepository`. 🚀
 

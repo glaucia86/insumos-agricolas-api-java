@@ -112,23 +112,25 @@ public class Produto {
     private UUID id;
     private String nome;
     private String descricao;
+    private String categoria;
     private String unidadeMedida;
     private BigDecimal preco;
     private Boolean ativo;
 
-    public Produto(UUID id, String nome, String descricao, String unidadeMedida, BigDecimal preco) {
+    public Produto(UUID id, String nome, String descricao, String categoria, String unidadeMedida, BigDecimal preco) {
         this.id = id;
         this.nome = nome;
         this.descricao = descricao;
+        this.categoria = categoria;
         this.unidadeMedida = unidadeMedida;
         this.preco = preco;
         this.ativo = true;
     }
 
-    // Getters
     public UUID getId() { return id; }
     public String getNome() { return nome; }
     public String getDescricao() { return descricao; }
+    public String getCategoria() { return categoria; }
     public String getUnidadeMedida() { return unidadeMedida; }
     public BigDecimal getPreco() { return preco; }
     public Boolean getAtivo() { return ativo; }
@@ -154,9 +156,10 @@ Crie `src/main/java/br/com/agro/insumos/api/domain/port/in/CadastraProdutoUseCas
 package br.com.agro.insumos.api.domain.port.in;
 
 import br.com.agro.insumos.api.domain.model.Produto;
+import java.math.BigDecimal;
 
 public interface CadastraProdutoUseCase {
-    Produto executar(String nome, String descricao, String unidadeMedida, java.math.BigDecimal preco);
+    Produto executar(String nome, String descricao, String categoria, String unidadeMedida, BigDecimal preco);
 }
 ```
 
@@ -311,6 +314,77 @@ Squads grandes trocam peças sem quebrar o resto:
 
 **O domínio nunca muda por causa de infraestrutura.** Esse é o valor central da arquitetura.
 
----
 
 Na sequência criaremos o **service** que implementa o use case. 🚀
+
+---
+
+## Domain Service — `CadastraProdutoService.java`
+
+Crie `src/main/java/br/com/agro/insumos/api/domain/service/CadastraProdutoService.java`:
+
+<details><summary><b>CadastraProdutoService.java</b></summary>
+<br/>
+
+```java
+package br.com.agro.insumos.api.domain.service;
+
+import br.com.agro.insumos.api.domain.model.Produto;
+import br.com.agro.insumos.api.domain.port.in.CadastraProdutoUseCase;
+import br.com.agro.insumos.api.domain.port.out.ProdutoRepository;
+import java.math.BigDecimal;
+import java.util.UUID;
+
+public class CadastraProdutoService implements CadastraProdutoUseCase {
+
+    private final ProdutoRepository produtoRepository;
+
+    public CadastraProdutoService(ProdutoRepository produtoRepository) {
+        this.produtoRepository = produtoRepository;
+    }
+
+    @Override
+    public Produto executar(String nome, String descricao, String categoria, String unidadeMedida, BigDecimal preco) {
+        Produto produto = new Produto(
+            UUID.randomUUID(),
+            nome,
+            descricao,
+            categoria,
+            unidadeMedida,
+            preco
+        );
+        return produtoRepository.salvar(produto);
+    }
+}
+```
+
+</details>
+<br/>
+
+### O que está acontecendo aqui?
+- Implementa `CadastraProdutoUseCase` — é o chef recebendo a comanda
+- Depende de `ProdutoRepository` — mas só da interface, não da implementação JPA
+- Gera o `UUID` aqui no domínio — a identidade do produto é responsabilidade do domínio, não do banco
+- Zero anotações Spring — esse arquivo é Java puro, testável sem subir nenhum contexto
+
+A linha atual está com a sintaxe errada. O `[!NOTE]` precisa estar sozinho na primeira linha, e o conteúdo nas linhas seguintes. Ficaria assim:
+
+```markdown
+> [!NOTE]
+> **Paralelo TypeScript:**
+> ```typescript
+> class CadastraProdutoService implements ICadastraProdutoUseCase {
+>     constructor(private readonly repository: IProdutoRepository) {}
+>     
+>     async executar(dto: CadastraProdutoDto): Promise<Produto> {
+>         const produto = new Produto(randomUUID(), dto.nome, ...)
+>         return this.repository.salvar(produto)
+>     }
+> }
+> ```
+```
+
+Na sequência criaremos o **adapter de persistência** — a implementação JPA do `ProdutoRepository`. 🚀
+
+---
+

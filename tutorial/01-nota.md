@@ -47,8 +47,6 @@ insumos-api/src/main/java/br/com/agro/insumos/api/
     └── config/                      # Configurações Spring
 ```
 
----
-
 ## Mapeamento com TypeScript
 
 | Hexagonal | TypeScript equivalente |
@@ -91,9 +89,7 @@ find src/main/java/br/com/agro/insumos/api -type d
 
 ## ✅ Estrutura hexagonal criada!
 
-Agora vamos criar o primeiro domínio. Vamos de fora para dentro — começando pelo modelo de domínio.
-
----
+Agora vamos criar o primeiro domínio. Vamos de fora para dentro, começando pelo modelo de domínio.
 
 ## Primeiro arquivo: `Produto.java`
 
@@ -145,9 +141,7 @@ public class Produto {
 
 > **Por que `BigDecimal` e não `double`?** Para valores monetários e preços no contexto financeiro/agro, `double` tem problemas de precisão. `BigDecimal` é o padrão em contexto bancário — você vai ver isso em todo código Java sério que lida com dinheiro.
 
----
-
-Crie o arquivo e me confirme. Vamos criar a **porta de entrada** na sequência. 🚀
+Vamos criar a **porta de entrada** na sequência. 🚀
 
 ## Port de Entrada — `CadastraProdutoUseCase.java`
 
@@ -167,8 +161,6 @@ public interface CadastraProdutoUseCase {
 > **O que é isso no modelo hexagonal?** É a **porta de entrada** — define o contrato do que o domínio aceita fazer. O controller REST vai depender dessa interface, nunca da implementação direta.
 
 > **Paralelo TypeScript:** é exatamente como você definiria uma `interface ICreateProdutoUseCase` que o controller recebe via injeção de dependência no Inversify/tsyringe.
-
----
 
 ## Port de Saída — `ProdutoRepository.java`
 
@@ -193,15 +185,10 @@ public interface ProdutoRepository {
 
 > **Por que essa interface está no `domain/port/out` e não em `infrastructure`?** Porque o domínio **define o contrato** que o banco precisa cumprir — não o contrário. A implementação JPA vai ficar em `infrastructure/persistence` e vai implementar essa interface.
 
----
 
-## Explicação detalhada sobre Arquitetura Hexagonal
+## Arquitetura Hexagonal - Uma explicação detalhada
 
-# Arquitetura Hexagonal — A Explicação Dummie
-
-Vou usar uma analogia do mundo real antes de voltar para o código.
-
----
+Vamos usar uma analogia do mundo real antes de voltarmos para o código.
 
 ## Pensa no domínio como um restaurante
 
@@ -386,5 +373,40 @@ A linha atual está com a sintaxe errada. O `[!NOTE]` precisa estar sozinho na p
 
 Na sequência criaremos o **adapter de persistência** — a implementação JPA do `ProdutoRepository`. 🚀
 
----
+## Adapter de Persistência — Infraestrutura JPA
+
+Antes de criar os arquivos, precisamos adicionar as dependências de banco ao `pom.xml`.
+
+Abra o `pom.xml` e localize o bloco `<dependencies>`. Adicione as duas dependências abaixo junto com as que já existem:
+
+```xml
+<!-- Spring Data JPA — equivalente ao TypeORM/Prisma -->
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-data-jpa</artifactId>
+</dependency>
+
+<!-- Driver PostgreSQL -->
+<dependency>
+    <groupId>org.postgresql</groupId>
+    <artifactId>postgresql</artifactId>
+    <scope>runtime</scope>
+</dependency>
+```
+
+Salve e rode:
+
+```bash
+./mvnw dependency:resolve
+```
+
+Saída esperada no final:
+
+```txt
+BUILD SUCCESS
+```
+
+Vamos seguir para criar a **entidade JPA** e o **repository adapter**. 🚀
+
+
 

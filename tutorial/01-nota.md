@@ -17,6 +17,7 @@ src/
 
 A Arquitetura Hexagonal (Ports & Adapters) evolui esse conceito com uma regra central:
 
+> [!INFO]
 > **O domínio não conhece nada do mundo externo.** HTTP, banco de dados, Kafka — tudo isso é detalhe de infraestrutura.
 
 O domínio fica no centro. O mundo externo se conecta a ele através de **ports** (interfaces) e **adapters** (implementações).

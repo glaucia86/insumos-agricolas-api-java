@@ -1,12 +1,29 @@
 # Etapa 2 — Arquitetura Hexagonal
 
-Antes de escrever qualquer código, precisa entender a estrutura que vamos montar — porque ela define onde cada arquivo vai viver pelo resto do projeto.
+> Este tutorial é voltado para desenvolvedoras TypeScript/Node.js que estão aprendendo Java com Spring Boot. Ao longo do caminho, cada conceito novo vem acompanhado de um paralelo com o mundo TypeScript que você já conhece.
 
 ---
 
-## O que é Arquitetura Hexagonal?
+## Índice
 
-No Node.js você provavelmente já usou uma estrutura em camadas parecida com isso:
+1. [O que é Arquitetura Hexagonal?](#1-o-que-é-arquitetura-hexagonal)
+2. [A estrutura de pastas do projeto](#2-a-estrutura-de-pastas-do-projeto)
+3. [Criando a estrutura no terminal](#3-criando-a-estrutura-no-terminal)
+4. [Domínio — `Produto.java`](#4-domínio--produtojava)
+5. [Port de Entrada — `CadastraProdutoUseCase.java`](#5-port-de-entrada--cadastraprodutousecasejava)
+6. [Port de Saída — `ProdutoRepository.java`](#6-port-de-saída--produtorepositoryjava)
+7. [Entendendo o fluxo completo](#7-entendendo-o-fluxo-completo)
+8. [Domain Service — `CadastraProdutoService.java`](#8-domain-service--cadastraprodutoservicejava)
+9. [Infraestrutura JPA — adicionando dependências](#9-infraestrutura-jpa--adicionando-dependências)
+10. [Entidade JPA — `ProdutoEntity.java`](#10-entidade-jpa--produtoentityjava)
+11. [Spring Data Repository — `ProdutoJpaRepository.java`](#11-spring-data-repository--produtojparepositoryjava)
+12. [Adapter de Persistência — `ProdutoRepositoryAdapter.java`](#12-adapter-de-persistência--produtorepositoryadapterjava)
+
+---
+
+## 1. O que é Arquitetura Hexagonal?
+
+No Node.js você provavelmente já usou uma estrutura em camadas assim:
 
 ```txt
 src/
@@ -15,55 +32,81 @@ src/
 └── repositories/
 ```
 
-A Arquitetura Hexagonal (Ports & Adapters) evolui esse conceito com uma regra central:
+A **Arquitetura Hexagonal** (também chamada de *Ports & Adapters*) evolui esse conceito com uma única regra central:
 
 > [!TIP]
 > **O domínio não conhece nada do mundo externo.** HTTP, banco de dados, Kafka — tudo isso é detalhe de infraestrutura.
 
-O domínio fica no centro. O mundo externo se conecta a ele através de **ports** (interfaces) e **adapters** (implementações).
+O domínio fica no centro. O mundo externo se conecta a ele através de **ports** (interfaces) e **adapters** (implementações concretas).
+
+### Analogia: o restaurante
+
+Pensa no **chef** como o domínio — ele só sabe cozinhar. Não importa se o pedido veio do app, do WhatsApp ou do garçom, e não importa se os ingredientes vieram do mercado X ou Y. Ele só recebe a comanda e cozinha.
+
+```
+                    ┌─────────────────────────────┐
+                    │                             │
+  [App] ────────►  │         O CHEF              │ ────────►  [Geladeira]
+  [Web] ────────►  │        (domínio)             │ ────────►  [Fornecedor]
+  [Tel] ────────►  │                             │ ────────►  [Estoque]
+                    │                             │
+                    └─────────────────────────────┘
+
+        ▲ ports/in                       ports/out ▲
+    (quem entrega                     (o que o chef
+      a comanda)                          precisa)
+```
+
+| Conceito | O que é | Paralelo TypeScript |
+|---|---|---|
+| `port/in` | Contrato do que o domínio aceita fazer | `interface ICreateProdutoUseCase` |
+| `port/out` | Contrato do que o domínio precisa do mundo externo | `interface IProdutoRepository` |
+| `domain/service` | Implementação da lógica de negócio | Classe `ProdutoService` |
+| `infrastructure/web` | Adapter que traduz HTTP → domínio | Controller Express/Fastify |
+| `infrastructure/persistence` | Adapter que traduz domínio → banco | Repository Prisma/TypeORM |
 
 ---
 
-## A estrutura que vamos adotar
+## 2. A estrutura de pastas do projeto
 
 ```txt
 insumos-api/src/main/java/br/com/agro/insumos/api/
 │
 ├── domain/                          # Núcleo — zero dependências externas
-│   ├── model/                       # Entidades e Value Objects
+│   ├── model/                       # Entidades e Value Objects (Java puro)
 │   ├── port/
-│   │   ├── in/                      # Portas de entrada (use cases)
-│   │   └── out/                     # Portas de saída (repositórios, eventos)
+│   │   ├── in/                      # Portas de entrada (contratos dos use cases)
+│   │   └── out/                     # Portas de saída (contratos dos repositórios)
 │   └── service/                     # Implementação dos use cases
 │
 ├── application/                     # Orquestra o domínio
-│   └── usecase/                     # Implementação concreta dos ports in
+│   └── usecase/                     # Implementações concretas dos ports in
 │
 └── infrastructure/                  # Adapters — detalhes do mundo externo
     ├── web/                         # REST controllers (adapter in)
-    │   └── dto/                     # Request/Response bodies
+    │   └── dto/                     # Objetos de Request/Response
     ├── persistence/                 # JPA repositories (adapter out)
-    │   └── entity/                  # Entidades JPA (mapeamento banco)
+    │   └── entity/                  # Entidades JPA (mapeamento para o banco)
     └── config/                      # Configurações Spring
 ```
 
-## Mapeamento com TypeScript
+### Mapeamento com TypeScript
 
-| Hexagonal | TypeScript equivalente |
+| Hexagonal Java | Equivalente TypeScript |
 |---|---|
-| `domain/model/` | Suas classes de domínio puras |
-| `port/in/` | Interface do service que o controller chama |
+| `domain/model/` | Classes de domínio puras (sem decorators) |
+| `port/in/` | Interface que o controller chama via DI |
 | `port/out/` | Interface do repository que o service chama |
 | `domain/service/` | Implementação do service |
 | `infrastructure/web/` | Controllers Express/Fastify |
 | `infrastructure/persistence/` | Repositories Prisma/TypeORM |
-| `dto/` | Tipos de request/response (zod schemas) |
+| `dto/` | Tipos de request/response (zod schemas, DTOs NestJS) |
 
 ---
 
-## Vamos criar a estrutura
+## 3. Criando a estrutura no terminal
 
-No terminal, dentro de `insumos-api`:
+Dentro da pasta `insumos-api`, rode:
 
 ```bash
 # Domínio
@@ -81,22 +124,20 @@ mkdir -p src/main/java/br/com/agro/insumos/api/infrastructure/persistence/entity
 mkdir -p src/main/java/br/com/agro/insumos/api/infrastructure/config
 ```
 
-Confirme que criou com:
+Confirme que tudo foi criado:
 
 ```bash
 find src/main/java/br/com/agro/insumos/api -type d
 ```
 
-## ✅ Estrutura hexagonal criada!
+> [!NOTE]
+> No Windows (PowerShell), substitua `mkdir -p` por `New-Item -ItemType Directory -Force -Path`.
 
-Agora vamos criar o primeiro domínio. Vamos de fora para dentro, começando pelo modelo de domínio.
+---
 
-## Primeiro arquivo: `Produto.java`
+## 4. Domínio — `Produto.java`
 
-Crie o arquivo `src/main/java/br/com/agro/insumos/api/domain/model/Produto.java`:
-
-<details><summary><b>Produto.java</b></summary>
-<br/>
+Crie `src/main/java/br/com/agro/insumos/api/domain/model/Produto.java`:
 
 ```java
 package br.com.agro.insumos.api.domain.model;
@@ -134,16 +175,17 @@ public class Produto {
 }
 ```
 
-</details>
-<br/>
+> [!NOTE]
+> **Por que sem Lombok aqui?**
+> O modelo de domínio é Java puro — sem anotações de framework. Isso garante que o domínio não tem dependências externas. Lombok vai entrar nos DTOs e nas entidades JPA, onde faz sentido.
 
-> **Por que sem Lombok aqui?** O modelo de domínio é puro Java — sem anotações de framework. Isso garante que o domínio não tem dependências externas. Lombok vai entrar nos DTOs e nas entidades JPA.
+> [!NOTE]
+> **Por que `BigDecimal` e não `double`?**
+> Para valores monetários, `double` tem problemas de precisão em ponto flutuante. `BigDecimal` é o padrão em qualquer código Java sério que lida com dinheiro ou preços.
 
-> **Por que `BigDecimal` e não `double`?** Para valores monetários e preços no contexto financeiro/agro, `double` tem problemas de precisão. `BigDecimal` é o padrão em contexto bancário — você vai ver isso em todo código Java sério que lida com dinheiro.
+---
 
-Vamos criar a **porta de entrada** na sequência. 🚀
-
-## Port de Entrada — `CadastraProdutoUseCase.java`
+## 5. Port de Entrada — `CadastraProdutoUseCase.java`
 
 Crie `src/main/java/br/com/agro/insumos/api/domain/port/in/CadastraProdutoUseCase.java`:
 
@@ -158,11 +200,23 @@ public interface CadastraProdutoUseCase {
 }
 ```
 
-> **O que é isso no modelo hexagonal?** É a **porta de entrada** — define o contrato do que o domínio aceita fazer. O controller REST vai depender dessa interface, nunca da implementação direta.
+Esta é a **comanda do chef** — o contrato do que o domínio aceita fazer. O controller REST vai depender dessa interface, nunca da implementação direta.
 
-> **Paralelo TypeScript:** é exatamente como você definiria uma `interface ICreateProdutoUseCase` que o controller recebe via injeção de dependência no Inversify/tsyringe.
+O controller REST vai preencher essa comanda. Amanhã, se chegar um consumer Kafka, ele também preenche a mesma comanda. **O chef não muda — só quem entrega a comanda muda.**
 
-## Port de Saída — `ProdutoRepository.java`
+> [!NOTE]
+> **Paralelo TypeScript:**
+> ```typescript
+> interface ICadastraProdutoUseCase {
+>   executar(nome: string, descricao: string, categoria: string,
+>            unidadeMedida: string, preco: number): Promise<Produto>
+> }
+> ```
+> É exatamente como você definiria uma interface que o controller recebe via injeção de dependência no Inversify ou tsyringe.
+
+---
+
+## 6. Port de Saída — `ProdutoRepository.java`
 
 Crie `src/main/java/br/com/agro/insumos/api/domain/port/out/ProdutoRepository.java`:
 
@@ -181,98 +235,31 @@ public interface ProdutoRepository {
 }
 ```
 
-> **Por que `Optional`?** É o equivalente ao `T | null` do TypeScript — força quem chama a tratar explicitamente o caso em que o produto não existe, em vez de receber um `null` silencioso.
+Esta é a **lista de ingredientes do chef** — o domínio define o que precisa do banco, mas não sabe se os dados vêm do PostgreSQL, MongoDB ou de um arquivo txt.
 
-> **Por que essa interface está no `domain/port/out` e não em `infrastructure`?** Porque o domínio **define o contrato** que o banco precisa cumprir — não o contrário. A implementação JPA vai ficar em `infrastructure/persistence` e vai implementar essa interface.
+> [!NOTE]
+> **Por que `Optional<Produto>` e não `Produto`?**
+> `Optional<T>` é o equivalente Java de `T | null` no TypeScript. Ele força quem chama a tratar explicitamente o caso em que o produto não existe, em vez de receber um `null` silencioso.
 
-
-## Arquitetura Hexagonal - Uma explicação detalhada
-
-Vamos usar uma analogia do mundo real antes de voltarmos para o código.
-
-## Pensa no domínio como um restaurante
-
-O **chef** (domínio) só sabe cozinhar. Ele não sabe se o pedido veio por telefone, app, ou balcão. Ele não sabe se os ingredientes vieram do mercado X ou Y. Ele só recebe um pedido e cozinha.
-
-```
-                    ┌─────────────────────────────┐
-                    │                             │
-  [App] ────────►  │         O CHEF              │ ────────►  [Geladeira]
-  [Web] ────────►  │        (domínio)             │ ────────►  [Fornecedor]
-  [Tel] ────────►  │                             │ ────────►  [Estoque]
-                    │                             │
-                    └─────────────────────────────┘
-
-        ▲ ports/in                    ports/out ▲
-     (quem faz                           (o que o
-      o pedido)                        chef precisa)
-```
+> [!IMPORTANT]
+> **Por que essa interface está em `domain/port/out` e não em `infrastructure`?**
+> O domínio **define o contrato** que o banco precisa cumprir — não o contrário. A implementação JPA vai ficar em `infrastructure/persistence` e vai *implementar* essa interface.
 
 ---
 
-## `port/in` — A comanda que chega ao chef
+## 7. Entendendo o fluxo completo
 
-É o **contrato do que o chef aceita fazer**.
-
-Não importa se o pedido veio do app, do WhatsApp ou do garçom — todos preenchem a mesma comanda:
-
-```txt
-COMANDA:
-- Nome do prato: ___________
-- Observações: ___________
-- Quantidade: ___________
-```
-
-No código isso é:
-
-```java
-// port/in/CadastraProdutoUseCase.java
-public interface CadastraProdutoUseCase {
-    Produto executar(String nome, String descricao, ...);
-}
-```
-
-O controller REST vai preencher essa comanda. Amanhã se vier um consumer Kafka, ele também preenche a mesma comanda. **O chef não muda — só quem entrega a comanda muda.**
-
----
-
-## `port/out` — O que o chef precisa do mundo externo
-
-O chef precisa de ingredientes — mas não vai ao mercado buscar. Ele **define o que precisa** e alguém traz:
-
-```txt
-LISTA DO CHEF:
-- Quero salvar um produto
-- Quero buscar um produto por id
-- Quero listar todos
-```
-
-No código:
-
-```java
-// port/out/ProdutoRepository.java
-public interface ProdutoRepository {
-    Produto salvar(Produto produto);
-    Optional<Produto> buscarPorId(UUID id);
-    List<Produto> listarTodos();
-}
-```
-
-O chef não sabe se os ingredientes vêm do PostgreSQL, do MongoDB ou de um arquivo txt. Isso é problema de quem implementa a lista — não do chef.
-
----
-
-## O fluxo completo
+Antes de criar o service, vale visualizar como tudo se conecta:
 
 ```
 [HTTP Request]
      │
      ▼
-[Controller REST]          ← adapter in  (traduz HTTP → comanda)
+[Controller REST]          ← adapter in   (traduz HTTP → comanda)
      │
      │  chama
      ▼
-[CadastraProdutoUseCase]   ← port in     (a comanda — interface)
+[CadastraProdutoUseCase]   ← port in      (a comanda — interface)
      │
      │  implementado por
      ▼
@@ -280,39 +267,33 @@ O chef não sabe se os ingredientes vêm do PostgreSQL, do MongoDB ou de um arqu
      │
      │  chama
      ▼
-[ProdutoRepository]        ← port out    (a lista de ingredientes — interface)
+[ProdutoRepository]        ← port out     (lista de ingredientes — interface)
      │
      │  implementado por
      ▼
-[ProdutoRepositoryJpa]     ← adapter out (busca no PostgreSQL de verdade)
+[ProdutoRepositoryAdapter] ← adapter out  (busca no PostgreSQL de verdade)
      │
      ▼
 [PostgreSQL]
 ```
 
----
+### Por que esse design importa num projeto real?
 
-## Por que isso importa num projeto real?
+Squads grandes conseguem trocar peças sem quebrar o resto:
 
-Squads grandes trocam peças sem quebrar o resto:
+| Cenário | O que muda | O que não toca |
+|---|---|---|
+| Migrar do Oracle para PostgreSQL | Só o adapter out | Domínio intacto |
+| Adicionar endpoint gRPC além do REST | Só cria novo adapter in | Domínio intacto |
+| Testar o service sem banco | Cria um adapter out fake em memória | Domínio intacto |
 
-- Migraram do Oracle para o PostgreSQL? Só troca o **adapter out** — o domínio não toca.
-- Adicionaram um endpoint gRPC além do REST? Só cria um novo **adapter in** — o domínio não toca.
-- Precisam testar o service sem banco? Criam um **adapter out fake em memória** — o domínio não toca.
-
-**O domínio nunca muda por causa de infraestrutura.** Esse é o valor central da arquitetura.
-
-
-Na sequência criaremos o **service** que implementa o use case. 🚀
+> **O domínio nunca muda por causa de infraestrutura. Esse é o valor central da arquitetura.**
 
 ---
 
-## Domain Service — `CadastraProdutoService.java`
+## 8. Domain Service — `CadastraProdutoService.java`
 
 Crie `src/main/java/br/com/agro/insumos/api/domain/service/CadastraProdutoService.java`:
-
-<details><summary><b>CadastraProdutoService.java</b></summary>
-<br/>
 
 ```java
 package br.com.agro.insumos.api.domain.service;
@@ -346,38 +327,33 @@ public class CadastraProdutoService implements CadastraProdutoUseCase {
 }
 ```
 
-</details>
-<br/>
+O que está acontecendo:
 
-### O que está acontecendo aqui?
-- Implementa `CadastraProdutoUseCase` — é o chef recebendo a comanda
-- Depende de `ProdutoRepository` — mas só da interface, não da implementação JPA
-- Gera o `UUID` aqui no domínio — a identidade do produto é responsabilidade do domínio, não do banco
-- Zero anotações Spring — esse arquivo é Java puro, testável sem subir nenhum contexto
-
-A linha atual está com a sintaxe errada. O `[!NOTE]` precisa estar sozinho na primeira linha, e o conteúdo nas linhas seguintes. Ficaria assim:
+- **`implements CadastraProdutoUseCase`** — é o chef recebendo a comanda
+- **Depende de `ProdutoRepository`** — mas só da interface, não da implementação JPA
+- **Gera o `UUID` no domínio** — a identidade do produto é responsabilidade do domínio, não do banco
+- **Zero anotações Spring** — Java puro, testável sem subir nenhum contexto de aplicação
 
 > [!NOTE]
 > **Paralelo TypeScript:**
 > ```typescript
 > class CadastraProdutoService implements ICadastraProdutoUseCase {
->     constructor(private readonly repository: IProdutoRepository) {}
->     
->     async executar(dto: CadastraProdutoDto): Promise<Produto> {
->         const produto = new Produto(randomUUID(), dto.nome, ...)
->         return this.repository.salvar(produto)
->     }
+>   constructor(private readonly repository: IProdutoRepository) {}
+>
+>   async executar(dto: CadastraProdutoDto): Promise<Produto> {
+>     const produto = new Produto(randomUUID(), dto.nome, ...)
+>     return this.repository.salvar(produto)
+>   }
 > }
 > ```
 
+---
 
-Na sequência criaremos o **adapter de persistência** — a implementação JPA do `ProdutoRepository`. 🚀
+## 9. Infraestrutura JPA — adicionando dependências
 
-## Adapter de Persistência — Infraestrutura JPA
+Antes de criar os arquivos de persistência, adicione as dependências de banco ao `pom.xml`.
 
-Antes de criar os arquivos, precisamos adicionar as dependências de banco ao `pom.xml`.
-
-Abra o `pom.xml` e localize o bloco `<dependencies>`. Adicione as duas dependências abaixo junto com as que já existem:
+Localize o bloco `<dependencies>` e adicione:
 
 ```xml
 <!-- Spring Data JPA — equivalente ao TypeORM/Prisma -->
@@ -394,7 +370,7 @@ Abra o `pom.xml` e localize o bloco `<dependencies>`. Adicione as duas dependên
 </dependency>
 ```
 
-Salve e rode:
+Salve e resolva as dependências:
 
 ```bash
 ./mvnw dependency:resolve
@@ -406,7 +382,201 @@ Saída esperada no final:
 BUILD SUCCESS
 ```
 
-Vamos seguir para criar a **entidade JPA** e o **repository adapter**. 🚀
+---
+
+## 10. Entidade JPA — `ProdutoEntity.java`
+
+Crie `src/main/java/br/com/agro/insumos/api/infrastructure/persistence/entity/ProdutoEntity.java`:
+
+```java
+package br.com.agro.insumos.api.infrastructure.persistence.entity;
+
+import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+@Entity
+@Table(name = "produtos")
+public class ProdutoEntity {
+
+    @Id
+    @Column(columnDefinition = "uuid")
+    private UUID id;
+
+    @Column(nullable = false)
+    private String nome;
+
+    @Column
+    private String descricao;
+
+    @Column
+    private String categoria;
+
+    @Column(name = "unidade_medida", nullable = false)
+    private String unidadeMedida;
+
+    @Column(nullable = false, precision = 19, scale = 4)
+    private BigDecimal preco;
+
+    @Column(nullable = false)
+    private Boolean ativo;
+}
+```
+
+> [!NOTE]
+> **Por que uma entidade separada do model de domínio?**
+> O `Produto.java` do domínio é Java puro — sem anotações de framework. A `ProdutoEntity` é o mapeamento para o banco — responsabilidade exclusiva da infraestrutura. Se um dia a equipe migrar de JPA para outra solução, o domínio não toca.
+>
+> **Paralelo TypeScript:** é como separar sua classe de domínio `Produto` da sua entidade TypeORM `ProdutoEntity` com `@Entity()`, `@Column()` etc.
+
+**Anotações Lombok usadas aqui:**
+
+| Anotação | O que faz | Equivalente TypeScript |
+|---|---|---|
+| `@Data` | Gera getters, setters, `equals`, `hashCode` e `toString` | Campos públicos com `get`/`set` automáticos |
+| `@NoArgsConstructor` | Construtor sem argumentos (JPA exige) | `constructor() {}` |
+| `@AllArgsConstructor` | Construtor com todos os campos | `constructor(id, nome, ...)` |
+
+---
+
+## 11. Spring Data Repository — `ProdutoJpaRepository.java`
+
+Crie `src/main/java/br/com/agro/insumos/api/infrastructure/persistence/ProdutoJpaRepository.java`:
+
+```java
+package br.com.agro.insumos.api.infrastructure.persistence;
+
+import br.com.agro.insumos.api.infrastructure.persistence.entity.ProdutoEntity;
+import org.springframework.data.jpa.repository.JpaRepository;
+
+import java.util.UUID;
+
+public interface ProdutoJpaRepository extends JpaRepository<ProdutoEntity, UUID> {
+}
+```
+
+Só de estender `JpaRepository` você ganha `save`, `findById`, `findAll`, `delete` e muito mais — sem escrever uma linha de SQL.
+
+> [!NOTE]
+> **Paralelo TypeScript:**
+> É o equivalente ao `Repository<ProdutoEntity>` do TypeORM que você injeta e já tem todos os métodos CRUD disponíveis — ou ao `prisma.produto` com os métodos `create`, `findUnique`, `findMany` etc.
+
+---
+
+## 12. Adapter de Persistência — `ProdutoRepositoryAdapter.java`
+
+Crie `src/main/java/br/com/agro/insumos/api/infrastructure/persistence/ProdutoRepositoryAdapter.java`:
+
+```java
+package br.com.agro.insumos.api.infrastructure.persistence;
+
+import br.com.agro.insumos.api.domain.model.Produto;
+import br.com.agro.insumos.api.domain.port.out.ProdutoRepository;
+import br.com.agro.insumos.api.infrastructure.persistence.entity.ProdutoEntity;
+import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+
+@Component
+@RequiredArgsConstructor
+public class ProdutoRepositoryAdapter implements ProdutoRepository {
+
+    private final ProdutoJpaRepository jpaRepository;
+
+    @Override
+    public Produto salvar(Produto produto) {
+        ProdutoEntity entity = Objects.requireNonNull(toEntity(produto));
+        ProdutoEntity saved = jpaRepository.save(entity);
+        return toDomain(saved);
+    }
+
+    @Override
+    public Optional<Produto> buscarPorId(@NonNull UUID id) {
+        return jpaRepository.findById(id).map(this::toDomain);
+    }
+
+    @Override
+    public List<Produto> listarTodos() {
+        return jpaRepository.findAll().stream()
+                .map(this::toDomain)
+                .toList();
+    }
+
+    // --- Mappers ---
+
+    private ProdutoEntity toEntity(Produto produto) {
+        return new ProdutoEntity(
+                produto.getId(),
+                produto.getNome(),
+                produto.getDescricao(),
+                produto.getCategoria(),
+                produto.getUnidadeMedida(),
+                produto.getPreco(),
+                produto.getAtivo()
+        );
+    }
+
+    private Produto toDomain(ProdutoEntity entity) {
+        return new Produto(
+                entity.getId(),
+                entity.getNome(),
+                entity.getDescricao(),
+                entity.getCategoria(),
+                entity.getUnidadeMedida(),
+                entity.getPreco()
+        );
+    }
+}
+```
+
+Esta é a peça que conecta o domínio ao banco. Ela implementa `ProdutoRepository` (interface do domínio) usando o `ProdutoJpaRepository` (Spring Data). O domínio nunca sabe que existe JPA.
+
+| Elemento | Papel |
+|---|---|
+| `toEntity` / `toDomain` | Mappers que traduzem entre domínio e banco |
+| `@Component` | Registra a classe no container Spring (equivalente ao `@Injectable()` do NestJS) |
+| `@RequiredArgsConstructor` | Lombok gera o construtor com `jpaRepository` automaticamente |
+
+> [!NOTE]
+> **Paralelo TypeScript com `@RequiredArgsConstructor`:**
+> ```typescript
+> @Injectable()
+> class ProdutoRepositoryAdapter implements IProdutoRepository {
+>   constructor(private readonly jpaRepository: ProdutoJpaRepository) {}
+> }
+> ```
+
+---
+
+## Resumo da etapa
+
+Você construiu toda a espinha dorsal da arquitetura hexagonal:
+
+```
+domain/model/Produto.java               ← entidade de domínio (Java puro)
+domain/port/in/CadastraProdutoUseCase   ← contrato de entrada
+domain/port/out/ProdutoRepository       ← contrato de saída
+domain/service/CadastraProdutoService   ← lógica de negócio
+infrastructure/persistence/entity/      ← entidade JPA
+infrastructure/persistence/             ← adapter que fala com o banco
+```
+
+Na próxima etapa, criaremos o **controller REST** e os **DTOs** para expor a API via HTTP.
+
+
+
 
 
 
